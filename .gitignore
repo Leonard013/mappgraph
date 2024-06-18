@@ -2,3 +2,7 @@
 
 # Ignore data_test folder
 data_test/
+db_mappgraph/
+testMap2/
+testMap3/
+testMap4/
