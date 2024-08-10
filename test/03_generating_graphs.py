@@ -1,3 +1,4 @@
+## Import packages
 import pandas as pd
 pd.options.mode.chained_assignment = None  # default='warn'
 import os
@@ -6,8 +7,8 @@ import numpy as np
 import json
 import warnings
 warnings.filterwarnings('ignore')
+
 ## Graph generator functions
-# Basic reprocessing
 def basic_reprocessing(df, N):
 
   # remove dns protocol
@@ -33,7 +34,7 @@ def basic_reprocessing(df, N):
   # merge IP address into port (same tuple (IP, port) - same network destination)
   df['IP_port'] = list(zip(df['destination'], df['port']))
 
-  df = df.drop(['source_address', 'destination_address', 'certificate', 'des_greater_src', 'source_port', 'destination_port', 'destination', 'port'], axis=1)
+  df = df.drop(['source_address', 'destination_address', 'des_greater_src', 'source_port', 'destination_port', 'destination', 'port'], axis=1)
 
   # get N network destinations that have the most packets
   df_ = df.groupby(['IP_port'], as_index = False).agg({'length':['count']}).sort_values(by=[('length', 'count')], ascending=False)
@@ -41,7 +42,6 @@ def basic_reprocessing(df, N):
 
   return df[df['IP_port'].isin(destinations)].reset_index(drop=True)
 
-# Packet-based features
 def pkt_reprocessing(df):
   df = df.drop(['time', 'stream_id', 'protocol'], axis=1).reset_index(drop=True)
   df = df.sort_values(by=['IP_port']).reset_index(drop=True)
@@ -72,7 +72,7 @@ def extract_pkt_features(df, type="complete"):
 
     
   return features_df
-# Flow-based features
+
 def flow_reprocessing(df):
 
   df['protocol'] = df['protocol'] == 'tcp'
@@ -96,6 +96,7 @@ def flow_reprocessing(df):
 
   return df
 
+
 def extract_flow_features(df):
   features_df = df.groupby(['IP_port'], as_index = False).\
     agg({'protocol':['mean', 'count'],
@@ -108,15 +109,16 @@ def extract_flow_features(df):
   features_df.columns = ['IP_port', 'protocol', 'flows_num', 'flow_length_mean', 'flow_pkt_num_mean', 'flow_duration_mean']
 
   return features_df
-# Weights
+
 def weights_reprocessing(df):
   df = df.drop(['stream_id', 'protocol', 'length', 'outgoing'], axis=1).reset_index(drop=True)
   return df
+
 def weight(window_indx1, window_indx2):
   intersection = window_indx1.intersection(window_indx2)
   union = window_indx1.union(window_indx2)
   return len(intersection)
-# Merge packet-based and flow-based features
+
 def merge_features(df1, df2):
   features_df = pd.merge(df1, df2, on="IP_port")
 
@@ -124,7 +126,7 @@ def merge_features(df1, df2):
   features_df = features_df.sort_values(by="complete_pkt_num", ascending=False).reset_index(drop=True)
 
   return features_df
-# Main function to generate a graph from a traffic chunk
+
 '''
 input: mobile traffic chunck as a dataframe, N (the maximum nodes kept to build one graph), window (number of seconds used to build weight between two nodes)
 output: two dataframe. One contains features of all nodes in a graph generated. The other contains weights between the nodes.
@@ -201,6 +203,7 @@ def generate_features_weights(df, N, window):
   weights_df['weight'] = (weights_df['weight'] - weights_df['weight'].min())/(weights_df['weight'].max() - weights_df['weight'].min())
 
   return features_df, weights_df
+## Generate and save graphs from the traffic chunks
 
 '''
 Input:
@@ -225,7 +228,7 @@ def generate_graphs_one_app(app_src, filenames):
     df = df.sort_values(by='time')
       
     if df.empty:
-      print('EMPTY')
+      print(filename, ':    EMPTY')
       continue
         
     df['time'] = df['time'] - df['time'].iloc[0] # get base time
@@ -233,8 +236,8 @@ def generate_graphs_one_app(app_src, filenames):
     #------------- generate one graph -----------------
     try:
       node_data, weights = generate_features_weights(df, N, window)
-    except:
-      print('WRONG')
+    except Exception as e:
+      print(f"WRONG: Error processing file {filename}: {str(e)}")
       continue
       
     if weights.shape[0] > 1:
@@ -281,6 +284,27 @@ def generate_graphs(duration, overlap, index=0):
   
   return graphs
 
+# # generate graphs for training dataset
+# training_graphs = generate_graphs(duration, overlap, index=0)
+# # generate graphs for testing dataset
+# testing_graphs = generate_graphs(duration, overlap, index=1)
+
+# # Get mean-std of each features in the training dataset
+
+# # define the initial empty dataframe
+# cols = ['IP_port'] + features + ['graph_id']
+# df = pd.DataFrame([], columns=cols)
+
+# # loop over train graphs
+# for app in training_graphs.keys():
+#   df_ = training_graphs[app][0]
+#   df = pd.concat([df, df_], axis=0)
+
+# # save mean and std of all featurs as dictionary
+# mean_std_dic = dict()
+# for feature in df.columns:
+#   if feature not in ['IP_port', 'ip1', 'ip2', 'ip3', 'ip4', 'protocol', 'graph_id']:
+#     mean_std_dic[feature] = (df[feature].mean(), df[feature].std())
 '''
 Input: A dataframe containing features of nodes in a graph, dictionary contain mean-std of all features
 Output: A dataframe of features after standardization
@@ -299,8 +323,11 @@ def standardize_features(df, mean_std_dic):
   
   return df
 
+# # Standardization
+# for app in training_graphs.keys():
+#   training_graphs[app][0] = standardize_features(training_graphs[app][0], mean_std_dic)
+#   testing_graphs[app][0] = standardize_features(testing_graphs[app][0], mean_std_dic)
 
-#Save graphs
 def save_graphs(graphs, dataset='train_graphs'):
   
   #----------------------- create folder to save graphs ---------------------
@@ -333,9 +360,6 @@ def save_graphs(graphs, dataset='train_graphs'):
     weights_df.to_csv(weights_path)
 
 
-
-
-## Generate and save graphs from the traffic chunks
 features = ['complete_max', 'complete_min', 'complete_mean', 'complete_mad', 'complete_std', 'complete_var', 'complete_skew',
        'complete_kurt', 'complete_pkt_num', 'complete_10per', 'complete_20per', 'complete_30per', 'complete_40per', 'complete_50per', 
         'complete_60per', 'complete_70per', 'complete_80per', 'complete_90per', 'out_max', 'out_min', 'out_mean', 'out_mad', 'out_std',
@@ -345,21 +369,20 @@ features = ['complete_max', 'complete_min', 'complete_mean', 'complete_mad', 'co
         'protocol', 'flows_num', 'flow_length_mean', 'flow_pkt_num_mean', 'flow_duration_mean', 'ip1', 'ip2', 'ip3', 'ip4'
        ]
 
+# To generate graphs for all parameter configurations, uncomment the 'configurations' variable and the loop below.
+# Place all subsequent code inside this loop and comment out the individual settings for duration, overlap, N, and window.
 
-
-
-## Config setting
-root_path = '/Volumes/T9/map'
-
-configurations = {
-    'params': [(5, 3), (4, 2), (3, 1), (2, 0), (1, 0)], # (duration, Overlap)
-    5: [(7,10),(10,10),(20,1),(20,5),(20,10),(30,10),(10000,10)], # (N, window)
-    4: [(20,10)],
-    3: [(20,10)],
-    2: [(20,10)],
-    1: [(20,10)],
-    'k': [10, 20] # window
-}
+# configurations = { 
+#     'params': [(5, 3), (4, 2), (3, 1), (2, 0), (1, 0)], # (duration, Overlap)
+#     5: [(7,10),(10,10),(20,1),(20,5),(20,10),(30,10),(10000,10)], # (N, window)
+#     4: [(20,10)], # (N, window)
+#     3: [(20,10)], # (N, window)
+#     2: [(20,10)], # (N, window)
+#     1: [(20,10)], # (N, window)
+#     'k': [10, 20] # window
+# }
+# for duration, overlap in configurations['params']:
+#   for N, window in configurations[duration]:
 
 
 duration = 5
@@ -367,47 +390,34 @@ overlap = 3
 N = 20
 window = 10
 
+root_path = 'path' # path to the dataset folder
 
 
-
-
-
-
-
-
-
-
-#Generate graphs
 # generate graphs for training dataset
 training_graphs = generate_graphs(duration, overlap, index=0)
 # generate graphs for testing dataset
 testing_graphs = generate_graphs(duration, overlap, index=1)
-#Standardize features of each node
-# Get mean-std of each features in the training dataset
 
+# Get mean-std of each features in the training dataset
 # define the initial empty dataframe
 cols = ['IP_port'] + features + ['graph_id']
 df = pd.DataFrame([], columns=cols)
 
 # loop over train graphs
 for app in training_graphs.keys():
-  df_ = training_graphs[app][0]
-  df = pd.concat([df, df_], axis=0)
+    df_ = training_graphs[app][0]
+    df = pd.concat([df, df_], axis=0)
 
 # save mean and std of all featurs as dictionary
 mean_std_dic = dict()
 for feature in df.columns:
-  if feature not in ['IP_port', 'ip1', 'ip2', 'ip3', 'ip4', 'protocol', 'graph_id']:
-    mean_std_dic[feature] = (df[feature].mean(), df[feature].std())
+    if feature not in ['IP_port', 'ip1', 'ip2', 'ip3', 'ip4', 'protocol', 'graph_id']:
+        mean_std_dic[feature] = (df[feature].mean(), df[feature].std())
+
 # Standardization
 for app in training_graphs.keys():
-  training_graphs[app][0] = standardize_features(training_graphs[app][0], mean_std_dic)
-  testing_graphs[app][0] = standardize_features(testing_graphs[app][0], mean_std_dic)
-
-
-
-
-
+    training_graphs[app][0] = standardize_features(training_graphs[app][0], mean_std_dic)
+    testing_graphs[app][0] = standardize_features(testing_graphs[app][0], mean_std_dic)
 
 save_graphs(training_graphs, dataset='train_graphs')
 save_graphs(testing_graphs, dataset='test_graphs')
