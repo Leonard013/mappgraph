@@ -3,6 +3,41 @@ import os
 from concurrent.futures import ProcessPoolExecutor
 
 def pcap_to_csv(pcap_file, output_file):
+    """
+    Convert a PCAP (Packet Capture) file to CSV format, extracting network flow information.
+    
+    This function processes network packets from a PCAP file and creates a CSV file containing
+    detailed information about each packet, including timestamps, stream identification, and 
+    protocol information. It tracks TCP and UDP flows by assigning unique stream IDs to 
+    bidirectional connections.
+
+    Args:
+        pcap_file (str): Path to the input PCAP file to be processed
+        output_file (str): Path where the output CSV file will be saved
+
+    CSV Output Format:
+        - time: Packet timestamp
+        - stream_id: Unique identifier for each network flow
+        - protocol: Network protocol (tcp/udp)
+        - source_address: Source IP address
+        - source_port: Source port number
+        - destination_address: Destination IP address
+        - destination_port: Destination port number
+        - length: Packet length in bytes
+
+    Note:
+        - Requires scapy library for PCAP processing
+        - Only processes TCP and UDP packets with valid IP information
+        - Bidirectional flows are assigned the same stream ID
+        - Packets missing critical information are skipped
+
+    Example:
+        >>> pcap_to_csv("capture.pcap", "output.csv")
+        # Creates a CSV file with network flow information
+
+    Raises:
+        Exception: Prints error message when packet processing fails
+    """
     strea_dict = {}
     counter = 0
     n = 0
@@ -62,6 +97,47 @@ def pcap_to_csv(pcap_file, output_file):
 
 
 def copy_and_process_files(src_root, dest_root):
+    """
+    Recursively processes PCAP files from a source directory and converts them to CSV format in a destination directory.
+    
+    This function walks through a directory tree, maintaining the directory structure while converting
+    PCAP files to CSV format. It skips hidden files and directories (those starting with '.') and 
+    processes only new files that haven't been converted yet.
+
+    Args:
+        src_root (str): Path to the source root directory containing PCAP files
+        dest_root (str): Path to the destination root directory where CSV files will be saved
+
+    Directory Processing:
+        - Maintains the same directory structure from source to destination
+        - Creates destination directories if they don't exist
+        - Skips hidden directories (starting with '.')
+        - Processes all non-hidden files in each directory
+
+    File Processing:
+        - Converts each PCAP file to CSV using pcap_to_csv function
+        - Output CSV files maintain the same name as input files (with .csv extension)
+        - Skips files that have already been processed (if CSV exists)
+        - Skips hidden files (starting with '.')
+
+    Progress Tracking:
+        - Prints processing status for each file
+        - Shows completion status with checkmark emoji
+        - Visual separation between file processing outputs
+
+    Example:
+        >>> copy_and_process_files("/path/to/pcap/files", "/path/to/csv/output")
+        Processing file1.pcap ... 🔄
+        Processed file1.pcap ✅
+        -----------------------------------
+        Processing file2.pcap ... 🔄
+        Processed file2.pcap ✅
+        -----------------------------------
+
+    Dependencies:
+        - Requires pcap_to_csv function for file conversion
+        - Uses os module for file system operations
+    """
     for root, dirs, files in os.walk(src_root):
         # Crea la struttura di directory nella destinazione
         for dir_name in dirs:
